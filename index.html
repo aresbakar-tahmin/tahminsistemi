@@ -1,0 +1,207 @@
+
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tahmin Sistemi - Ares</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      background: #0f0f0f;
+      color: #f1f1f1;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 100vh;
+      padding: 20px;
+      gap: 15px;
+    }
+    input, button {
+      padding: 10px;
+      font-size: 16px;
+      border: none;
+      border-radius: 6px;
+    }
+    input {
+      width: 150px;
+      text-align: center;
+    }
+    button {
+      background: #222;
+      color: #00ff88;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #00ff88;
+      color: #000;
+    }
+    .box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      max-width: 500px;
+    }
+    .satir {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      background: #222;
+      padding: 5px 10px;
+      border-radius: 6px;
+    }
+    #anaKutular {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    #anaKutular input {
+      width: 100px;
+      text-align: center;
+    }
+    #anaKutular span {
+      min-width: 80px;
+      display: inline-block;
+      text-align: center;
+      background: #222;
+      padding: 5px;
+      border-radius: 6px;
+    }
+    canvas {
+      background: #111;
+      border-radius: 10px;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h2>🔮 Öğrenen Tahmin Sistemi</h2>
+  <div class="box">
+    <div id="anaKutular">
+      <span id="tahminAna">Tahmin: -</span>
+      <input type="number" id="gercekAna" placeholder="Gerçek sayı">
+    </div>
+    <button id="tahminKaydet">Tahmin Et ve Kaydet</button>
+    <div id="kayitlar"></div>
+    <canvas id="grafik" width="400" height="200"></canvas>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+    const firebaseConfig = {
+      databaseURL: "https://tahminsistemi-ars2025-default-rtdb.firebaseio.com/"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const gercekInput = document.getElementById("gercekAna");
+    const tahminKaydetBtn = document.getElementById("tahminKaydet");
+    const kayitlarDiv = document.getElementById("kayitlar");
+    const tahminAna = document.getElementById("tahminAna");
+
+    let sonTahminler = [];
+
+    async function getSonTahminler() {
+      const snapshot = await get(ref(db, "tahminler"));
+      if (snapshot.exists()) {
+        return Object.values(snapshot.val());
+      }
+      return [];
+    }
+
+    function guncelleKayitlar(veriler) {
+      kayitlarDiv.innerHTML = "";
+      veriler.slice(-20).forEach(v => {
+        const div = document.createElement("div");
+        div.className = "satir";
+        div.textContent = `Tahmin: ${v.tahmin.toFixed(2)} | Gerçek: ${v.gercek.toFixed(2)} | Fark: ${v.fark.toFixed(2)}`;
+        kayitlarDiv.appendChild(div);
+      });
+    }
+
+    // Grafik
+    const ctx = document.getElementById('grafik').getContext('2d');
+    let chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          { label: 'Tahmin', data: [], borderColor: 'cyan', tension: 0.3 },
+          { label: 'Gerçek', data: [], borderColor: 'lime', tension: 0.3 },
+          { label: 'Fark', data: [], borderColor: 'orange', tension: 0.3 }
+        ]
+      },
+      options: { responsive: true, scales: { y: { beginAtZero: false, min: 0 } } }
+    });
+
+    async function guncelleGrafik(veriler) {
+      const son20 = veriler.slice(-20);
+      chart.data.labels = son20.map(v => v.id);
+      chart.data.datasets[0].data = son20.map(v => v.tahmin);
+      chart.data.datasets[1].data = son20.map(v => v.gercek);
+      chart.data.datasets[2].data = son20.map(v => v.fark);
+      chart.update();
+    }
+
+    async function yeniTahmin() {
+      let veriler = await getSonTahminler();
+      sonTahminler = veriler.map(v => v.gercek).slice(-10);
+
+      let tahmin;
+      if (sonTahminler.length === 0) {
+        tahmin = 1 + Math.random()*2;
+      } else {
+        let toplamFark = 0;
+        for (let i=1;i<sonTahminler.length;i++) toplamFark += sonTahminler[i]-sonTahminler[i-1];
+        let trend = toplamFark/(sonTahminler.length-1 || 1);
+        let sonDeger = sonTahminler[sonTahminler.length-1];
+        let noise = (Math.random()*0.4 - 0.2);
+        tahmin = sonDeger + trend + noise;
+      }
+      return Math.max(1, tahmin);
+    }
+
+    async function guncelleAnaKutular() {
+      const tahmin = await yeniTahmin();
+      tahminAna.textContent = `Tahmin: ${tahmin.toFixed(2)}`;
+      return tahmin;
+    }
+
+    tahminKaydetBtn.addEventListener("click", async () => {
+      const gercek = parseFloat(gercekInput.value);
+      if (isNaN(gercek)) { alert("Gerçek sayı gir!"); return; }
+
+      const tahmin = await yeniTahmin();
+
+      let veriler = await getSonTahminler();
+      const yeniId = veriler.length + 1;
+
+      const veri = {
+        id: yeniId,
+        tahmin: tahmin,
+        gercek: gercek,
+        fark: Math.abs(tahmin-gercek),
+        tarih: new Date().toLocaleString("tr-TR")
+      };
+
+      await set(ref(db, "tahminler/" + yeniId), veri);
+
+      veriler.push(veri);
+      guncelleKayitlar(veriler);
+      guncelleGrafik(veriler);
+
+      tahminAna.textContent = `Tahmin: ${tahmin.toFixed(2)}`;
+      gercekInput.value = "";
+    });
+
+    guncelleAnaKutular();
+  </script>
+</body>
+</html>
