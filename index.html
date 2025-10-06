@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tahmin Sistemi - Ares</title>
+  <style>
+    body {
+      background: #0f0f0f;
+      color: #f1f1f1;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: 15px;
+    }
+    input, button {
+      padding: 10px;
+      font-size: 16px;
+      border: none;
+      border-radius: 6px;
+    }
+    input {
+      width: 200px;
+      text-align: center;
+    }
+    button {
+      background: #222;
+      color: #00ff88;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #00ff88;
+      color: #000;
+    }
+    .box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h2>🔮 Öğrenen Tahmin Sistemi</h2>
+  <div class="box">
+    <input type="number" id="baslangic" placeholder="Başlangıç sayısı">
+    <button id="tahminEt">Tahmin Et</button>
+
+    <input type="number" id="gercek" placeholder="Gerçek sayı">
+    <button id="kaydet">Gerçeği Kaydet</button>
+
+    <p id="sonuc"></p>
+  </div>
+
+  <!-- ✅ Modüler Firebase SDK (GitHub Pages uyumlu) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+    // 🔧 Firebase ayarları
+    const firebaseConfig = {
+      databaseURL: "https://tahminsistemi-ars2025-default-rtdb.firebaseio.com/"
+    };
+
+    // Firebase'i başlat
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // Elemanlar
+    const baslangicInput = document.getElementById("baslangic");
+    const gercekInput = document.getElementById("gercek");
+    const tahminEtBtn = document.getElementById("tahminEt");
+    const kaydetBtn = document.getElementById("kaydet");
+    const sonucP = document.getElementById("sonuc");
+
+    let mevcutTahmin = null;
+    let sayac = 0;
+
+    // 🔹 Tahmin Et butonu
+    tahminEtBtn.addEventListener("click", () => {
+      const baslangic = parseFloat(baslangicInput.value);
+      if (isNaN(baslangic)) {
+        alert("Lütfen başlangıç sayısını gir!");
+        return;
+      }
+
+      mevcutTahmin = baslangic + (Math.random() * 2 - 1);
+      sonucP.textContent = `📊 Tahmin: ${mevcutTahmin.toFixed(3)}`;
+    });
+
+    // 🔹 Gerçeği Kaydet butonu
+    kaydetBtn.addEventListener("click", async () => {
+      const gercek = parseFloat(gercekInput.value);
+      if (isNaN(gercek) || mevcutTahmin === null) {
+        alert("Önce tahmin yap, sonra gerçek değeri gir!");
+        return;
+      }
+
+      sayac++;
+      const veri = {
+        id: sayac,
+        baslangic: parseFloat(baslangicInput.value),
+        tahmin: mevcutTahmin,
+        gercek: gercek,
+        fark: Math.abs(mevcutTahmin - gercek),
+        tarih: new Date().toLocaleString("tr-TR")
+      };
+
+      await set(ref(db, "tahminler/" + sayac), veri);
+
+      sonucP.textContent = `✅ Kayıt ${sayac} eklendi. Fark: ${veri.fark.toFixed(3)}`;
+      baslangicInput.value = "";
+      gercekInput.value = "";
+      mevcutTahmin = null;
+    });
+  </script>
+</body>
+</html>
